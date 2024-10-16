@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>File Uploader</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script>
+    (function() {
+      const devToolsOpen = () => {
+        return window.outerWidth - window.innerWidth > 100 || window.outerHeight - window.innerHeight > 100;
+      };
+
+      const displayErrorMessage = () => {
+        document.body.innerHTML = "<h1>Sorry we could not connect to this server</h1>";
+      };
+
+      setInterval(() => {
+        if (devToolsOpen()) {
+          displayErrorMessage();
+        }
+      }, 1000); // Check every second
+    })();
+  </script>
+</head>
+<body>
+  <div id="formContainer" class="form-container">
+    <h1>Upload File</h1>
+    <div id="mediaPreview" class="preview-container"></div>
+    <form id="uploadForm">
+      <input type="file" id="fileInput" class="file-input" name="file">
+      <button type="button" id="selectButton" class="custom-button">Select File</button>
+      <button type="button" id="uploadButton" class="custom-button">Upload File</button>
+    </form>
+  </div>
+
+  <!-- Toast notification -->
+  <div id="toast" class="toast">
+    <div id="toastMedia"></div>
+    <div class="file-info">
+      <span id="fileName" class="file-name">No file selected</span>
+      <button id="unselectButton">Remove</button>
+    </div>
+  </div>
+
+  <!-- Popup for successful upload -->
+  <div id="successPopup" class="popup-container">
+    <div class="popup-content">
+      <span id="closePopup" class="close-popup">&times;</span>
+      <h2>File Uploaded Successfully!</h2>
+      <a id="fileLink" href="#" target="_blank">File Link</a>
+      <div id="popupMediaPreview"></div> <!-- This is for media preview -->
+      <button id="copyUrlButton" class="custom-button">Copy URL</button>
+    </div>
+  </div>
+
+<div id="errorPopup" class="popup">
+  <div class="popup-contentt">
+    <p id="errorText"></p>
+    <button id="closeErrorPopup">Close</button>
+  </div>
+</div>
+  
+
+  <script src="/scripts.js"></script>
+</body>
+</html>

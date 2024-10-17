@@ -5,23 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>File Uploader</title>
   <link rel="stylesheet" href="/styles.css">
-  <script>
-    (function() {
-      const devToolsOpen = () => {
-        return window.outerWidth - window.innerWidth > 100 || window.outerHeight - window.innerHeight > 100;
-      };
-
-      const displayErrorMessage = () => {
-        document.body.innerHTML = "<h1>Sorry we could not connect to this server</h1>";
-      };
-
-      setInterval(() => {
-        if (devToolsOpen()) {
-          displayErrorMessage();
-        }
-      }, 1000); // Check every second
-    })();
-  </script>
+  
+  <!-- Favicon -->
+  <link rel="icon" href="https://via.placeholder.com/32" type="image/png">
 </head>
 <body>
   <div id="formContainer" class="form-container">
@@ -54,14 +40,13 @@
     </div>
   </div>
 
-<div id="errorPopup" class="popup">
-  <div class="popup-contentt">
-    <p id="errorText"></p>
-    <button id="closeErrorPopup">Close</button>
+  <div id="errorPopup" class="popup">
+    <div class="popup-contentt">
+      <p id="errorText"></p>
+      <button id="closeErrorPopup">Close</button>
+    </div>
   </div>
-</div>
   
-
   <script src="/scripts.js"></script>
 </body>
 </html>

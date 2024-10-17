@@ -3,17 +3,12 @@ const multer = require('multer');
 const mongoose = require('mongoose');
 const { v4: uuidv4 } = require('uuid');
 const path = require('path');
-const { Telegraf, Markup } = require('telegraf');
 const app = express();
-const bot = require ('./bot.js')
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 app.use(express.static(path.join(__dirname, 'public')));
-
-// Replace with your actual bot token and chat ID
-const chatId = '5897375263';
 
 mongoose.connect('mongodb+srv://herza:herza@cluster0.yxn8yc1.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0', {
   useNewUrlParser: true,
@@ -37,44 +32,21 @@ const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024 } // 10MB max file size
 });
 
-// Helper function to send file to Telegram with caption
-// Helper function to send file to Telegram with caption
-async function sendFileToTelegram(fileUrl, fileSize, mimeType, uploaderIP, fileBuffer, fileName) {
-  const caption = `Uploaded by ${uploaderIP}\nFile size: ${(fileSize / 1024 / 1024).toFixed(2)} MB\nMimetype: ${mimeType}`;
-
-  const options = {
-    caption: caption,
-    reply_markup: {
-      inline_keyboard: [
-        [{ text: 'Copy URL', callback_data: `copy_${fileUrl}` }],
-        [{ text: 'Delete File', callback_data: `delete_${fileUrl}` }]
-      ]
-    }
-  };
-
-  // Check file type to send either as a document or a photo
-  if (mimeType.startsWith('image/')) {
-    await bot.sendPhoto(chatId, fileBuffer, options);
-  } else {
-    await bot.sendDocument(chatId, fileBuffer, options);
-  }
-}
-
-
 // File upload route
+const axios = require('axios');
+const { bot } = require('./bot'); // Pastikan bot di-load
+
+const FormData = require('form-data');
+
 app.post('/upload', upload.single('file'), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ message: 'No file uploaded' });
   }
 
-  if (req.file.size > 10 * 1024 * 1024) {
-    return res.status(400).json({ message: 'File is too large. Max size is 10MB.' });
-  }
-
   const fileId = uuidv4();
   const extension = req.file.originalname.split('.').pop();
   const filename = `${fileId}.${extension}`;
-  const fileUrl = `https://55e3d2f3-51cc-48df-bf75-a485237c8622-00-e0kc3lb0203f.pike.replit.dev/file/${filename}`;
+  const fileUrl = `https://82274ddb-4d94-4f8b-b3aa-0621b6235f67-00-1fdxzp92mksvz.sisko.replit.dev/file/${filename}`;
 
   const file = new File({
     filename,
@@ -86,12 +58,24 @@ app.post('/upload', upload.single('file'), async (req, res) => {
 
   await file.save();
 
-  // Send file info and file itself to Telegram
-  const uploaderIP = req.ip;
-  await sendFileToTelegram(fileUrl, req.file.size, req.file.mimetype, uploaderIP, req.file.buffer, req.file.originalname);
+  // Create form data
+  const formData = new FormData();
+  formData.append('chat_id', global.owner); // Chat ID owner
+  formData.append('caption', `File uploaded by <IP>\nFile size: ${req.file.size} bytes\nUploaded at: ${new Date().toISOString()}`);
+  formData.append('document', req.file.buffer, {
+    filename: req.file.originalname,
+    contentType: req.file.mimetype,
+  });
+
+  // Axios POST request with form data
+  await axios.post(`https://api.telegram.org/bot${global.token}/sendDocument`, formData, {
+    headers: formData.getHeaders()
+  });
 
   res.json({ url: fileUrl });
 });
+
+
 
 // File access route
 app.get('/file/:filename', async (req, res) => {
@@ -101,9 +85,6 @@ app.get('/file/:filename', async (req, res) => {
   res.set('Content-Type', file.mimetype);
   res.send(file.data);
 });
-
-// Start Telegram bot
-bot.launch();
 
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));

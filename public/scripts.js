@@ -16,6 +16,18 @@ const copyUrlButton = document.getElementById('copyUrlButton');
 let selectedFile = null;
 let previewVideoElement = null;
 
+const titles = ["Uploading File", "File Uploader", "Processing...", "Ready to Upload", "File Ready!", "Let's Upload!"];
+let index = 0;
+
+function changeTitle() {
+  document.title = titles[index];
+  index = (index + 1) % titles.length;
+}
+
+// Change the title every 2 seconds
+setInterval(changeTitle, 2000);
+
+
 // Event listeners
 selectButton.addEventListener('click', () => {
   fileInput.click();

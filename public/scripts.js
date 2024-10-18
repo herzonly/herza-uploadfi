@@ -54,10 +54,7 @@ uploadButton.addEventListener('click', async () => {
     const formData = new FormData();
     formData.append('file', fileInput.files[0]);
 
-    const response = await fetch('/upload', {
-      method: 'POST',
-      body: formData
-    });
+    
 
     const data = await response.json();
 
@@ -92,7 +89,11 @@ function showErrorPopup(errorMessage) {
 }
 
 // Add event listener to close the error popup
-const closeErrorPopup = document.getElementById('closeErrorPopup');
+const const response = await fetch('/api/upload', {
+  method: 'POST',
+  body: formData
+});
+closeErrorPopup = document.getElementById('closeErrorPopup');
 closeErrorPopup.addEventListener('click', () => {
   const errorPopup = document.getElementById('errorPopup');
   errorPopup.classList.remove('show');

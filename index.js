@@ -8,8 +8,8 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-app.use(express.static(path.resolve(__dirname, 'public')));
-
+// Serve static files (update path resolving for Vercel)
+app.use(express.static(path.resolve('public')));
 
 mongoose.connect('mongodb+srv://herza:herza@cluster0.yxn8yc1.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0', {
   useNewUrlParser: true,
@@ -35,7 +35,7 @@ const upload = multer({
 
 // File upload route
 const axios = require('axios');
-const { bot } = require('./bot'); // Pastikan bot di-load
+const { bot } = require('./bot');
 
 const FormData = require('form-data');
 
@@ -59,7 +59,6 @@ app.post('/upload', upload.single('file'), async (req, res) => {
 
   await file.save();
 
-  // Create form data
   const formData = new FormData();
   formData.append('chat_id', global.owner); // Chat ID owner
   formData.append('caption', `File uploaded by <IP>\nFile size: ${req.file.size} bytes\nUploaded at: ${new Date().toISOString()}`);
@@ -68,15 +67,12 @@ app.post('/upload', upload.single('file'), async (req, res) => {
     contentType: req.file.mimetype,
   });
 
-  // Axios POST request with form data
   await axios.post(`https://api.telegram.org/bot${global.token}/sendDocument`, formData, {
     headers: formData.getHeaders()
   });
 
   res.json({ url: fileUrl });
 });
-
-
 
 // File access route
 app.get('/file/:filename', async (req, res) => {
@@ -87,13 +83,9 @@ app.get('/file/:filename', async (req, res) => {
   res.send(file.data);
 });
 
-app.get('*', (req, res) => {
-  res.sendFile(path.resolve(__dirname, 'public', 'index.html'));
-});
-
-
+// Serve index.html (Ensure correct path)
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  res.sendFile(path.resolve('public', 'index.html'));
 });
 
 // Start server

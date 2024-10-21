@@ -47,7 +47,7 @@ app.post('/upload', upload.single('file'), async (req, res) => {
   const fileId = uuidv4();
   const extension = req.file.originalname.split('.').pop();
   const filename = `${fileId}.${extension}`;
-  const fileUrl = `https://herza-uploader.onrender.com/file/${filename}`;
+  const fileUrl = `https://herza-uploadfl.vercel.app/file/${filename}`;
 
   const file = new File({
     filename,

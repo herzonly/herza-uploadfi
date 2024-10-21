@@ -47,7 +47,7 @@ app.post('/upload', upload.single('file'), async (req, res) => {
   const fileId = uuidv4();
   const extension = req.file.originalname.split('.').pop();
   const filename = `${fileId}.${extension}`;
-  const fileUrl = `https://herza-upload.vercel.app/file/${filename}`;
+  const fileUrl = `https://herza-uploadfl.vercel.app/file/${filename}`;
 
   const file = new File({
     filename,
@@ -85,7 +85,7 @@ app.get('/file/:filename', async (req, res) => {
 
 // Serve index.html (Ensure correct path)
 app.get('/', (req, res) => {
-  res.sendFile(path.resolve('..', 'public', 'index.html'));
+  res.sendFile(path.resolve('public', 'index.html'));
 });
 
 // Start server

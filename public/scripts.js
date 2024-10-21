@@ -27,7 +27,6 @@ function changeTitle() {
 // Change the title every 2 seconds
 setInterval(changeTitle, 2000);
 
-
 // Event listeners
 selectButton.addEventListener('click', () => {
   fileInput.click();
@@ -54,7 +53,10 @@ uploadButton.addEventListener('click', async () => {
     const formData = new FormData();
     formData.append('file', fileInput.files[0]);
 
-    
+    const response = await fetch('/api/upload', {
+      method: 'POST',
+      body: formData
+    });
 
     const data = await response.json();
 
@@ -89,16 +91,11 @@ function showErrorPopup(errorMessage) {
 }
 
 // Add event listener to close the error popup
-const const response = await fetch('/api/upload', {
-  method: 'POST',
-  body: formData
-});
-closeErrorPopup = document.getElementById('closeErrorPopup');
+const closeErrorPopup = document.getElementById('closeErrorPopup');
 closeErrorPopup.addEventListener('click', () => {
   const errorPopup = document.getElementById('errorPopup');
   errorPopup.classList.remove('show');
 });
-
 
 unselectButton.addEventListener('click', () => {
   selectedFile = null;

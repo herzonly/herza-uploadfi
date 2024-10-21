@@ -35,7 +35,7 @@ const upload = multer({
 
 // File upload route
 const axios = require('axios');
-const { bot } = require('./bot');
+const { bot } = require('../bot.js');
 
 const FormData = require('form-data');
 

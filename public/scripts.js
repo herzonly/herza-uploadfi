@@ -53,7 +53,7 @@ uploadButton.addEventListener('click', async () => {
     const formData = new FormData();
     formData.append('file', fileInput.files[0]);
 
-    const response = await fetch('/api/upload', {
+    const response = await fetch('/upload', {
       method: 'POST',
       body: formData
     });

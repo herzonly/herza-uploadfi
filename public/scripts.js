@@ -117,6 +117,26 @@ unselectButton.addEventListener('click', () => {
 });
 
 // Functions
+
+async function fetchServerStatus() {
+  try {
+    const response = await fetch('/api/status');
+    const data = await response.json();
+
+    document.getElementById('serverUptime').textContent = data.uptime;
+    document.getElementById('serverRAM').textContent = data.ram;
+    document.getElementById('uploadedFiles').textContent = data.uploadedFiles;
+  } catch (error) {
+    console.error('Failed to fetch server status:', error);
+  }
+}
+
+// Panggil fungsi untuk mengambil status server
+fetchServerStatus();
+
+// Auto-update status server setiap 5 detik (5000 ms)
+setInterval(fetchServerStatus, 1000);
+
 function handleMediaDisplay(file) {
   const fileType = file.type;
   mediaPreview.innerHTML = '';

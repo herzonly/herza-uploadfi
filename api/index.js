@@ -49,7 +49,7 @@ app.post('/upload', upload.single('file'), async (req, res) => {
   const fileId = uuidv4(); // Generate fileId
   const extension = req.file.originalname.split('.').pop();
   const filename = `${fileId}.${extension}`;
-  const baseUrl = 'https://uplmyfile.us.kg';
+  const baseUrl = 'https://uploadfile.notmebot.us.kg';
   const fileUrl = `${baseUrl}/file/${filename}`;
 
   const file = new File({

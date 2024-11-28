@@ -5,6 +5,7 @@ const { v4: uuidv4 } = require('uuid');
 const path = require('path');
 const os = require('os');
 const TelegramBot = require('node-telegram-bot-api');
+const fs = require('fs');
 
 const app = express();
 
@@ -18,75 +19,105 @@ const bot = new TelegramBot(token, { polling: true });
 // Ganti dengan ID chat pemilik
 let chatId = '5897375263';
 
-mongoose.connect('mongodb+srv://herza:herza@cluster0.yxn8yc1.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0', {
-  useNewUrlParser: true,
-  useUnifiedTopology: true
-});
+mongoose.connect(
+  'mongodb+srv://herza:herza@cluster0.yxn8yc1.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0',
+  { useNewUrlParser: true, useUnifiedTopology: true }
+);
 
 const fileSchema = new mongoose.Schema({
   fileId: {
     type: String,
     required: true,
-    unique: true
+    unique: true,
   },
   filename: String,
   originalname: String,
   mimetype: String,
   data: Buffer,
-  url: String
+  url: String,
+  createdAt: { type: Date, default: Date.now },
 });
 const File = mongoose.model('File', fileSchema);
 
 const storage = multer.memoryStorage();
 const upload = multer({
   storage,
-  limits: { fileSize: 10 * 1024 * 1024 }
+  limits: { fileSize: 10 * 1024 * 1024 }, // Batas 10MB
 });
+
+async function checkDatabaseSize() {
+  const stats = await mongoose.connection.db.stats();
+  const dbSizeMB = stats.dataSize / (1024 * 1024); // Ukuran database dalam MB
+  const targetSizeMB = 50;
+
+  if (dbSizeMB > targetSizeMB) {
+    console.log(`Database penuh: ${dbSizeMB.toFixed(2)} MB. Menghapus file...`);
+    const excessSize = dbSizeMB - targetSizeMB;
+
+    // Urutkan berdasarkan waktu upload (terlama dihapus lebih dulu)
+    const files = await File.find({}).sort({ createdAt: 1 }).lean();
+
+    let deletedSize = 0;
+    for (const file of files) {
+      deletedSize += file.data.length / (1024 * 1024); // Ukuran file dalam MB
+      await File.deleteOne({ fileId: file.fileId });
+      if (deletedSize >= excessSize) break;
+    }
+    console.log(
+      `File berhasil dihapus hingga database berada di bawah ${targetSizeMB} MB.`
+    );
+  }
+}
 
 app.post('/upload', upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
 
-  const fileId = uuidv4(); // Generate fileId
+  const fileId = uuidv4();
   const extension = req.file.originalname.split('.').pop();
   const filename = `${fileId}.${extension}`;
   const baseUrl = 'https://uploadfile.notmebot.us.kg';
   const fileUrl = `${baseUrl}/file/${filename}`;
 
   const file = new File({
-    fileId, // Simpan fileId
+    fileId,
     filename,
     originalname: req.file.originalname,
     mimetype: req.file.mimetype,
     data: req.file.buffer,
-    url: fileUrl
+    url: fileUrl,
   });
 
-  await file.save();
+  try {
+    await file.save();
+    await checkDatabaseSize(); // Periksa ukuran database setelah upload
 
-  const userIP = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+    const userIP = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
 
-  // Kirim file ke bot Telegram
-  bot.sendDocument(chatId, req.file.buffer, {
-    caption: `File uploaded by ${userIP}\nFile ID: ${fileId}\nFile size: ${req.file.size} bytes\nUploaded at: ${new Date().toISOString()}`
-  }).then(() => {
-    // Mengirim pesan kedua dengan tombol
-    bot.sendMessage(chatId, 'Please select about this file:', {
-      reply_markup: {
-        inline_keyboard: [
-          [
-            { text: 'Send File ID', callback_data: `send_id_${fileId}` }
-          ]
-        ]
-      }
-    });
-  }).catch((error) => {
-    console.error('Error sending file to Telegram:', error);
-  });
+    // Kirim file ke bot Telegram
+    bot
+      .sendDocument(chatId, req.file.buffer, {
+        caption: `File uploaded by ${userIP}\nFile ID: ${fileId}\nFile size: ${req.file.size} bytes\nUploaded at: ${new Date().toISOString()}`,
+      })
+      .then(() => {
+        bot.sendMessage(chatId, 'Please select about this file:', {
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: 'Send File ID', callback_data: `send_id_${fileId}` }],
+            ],
+          },
+        });
+      })
+      .catch((error) => {
+        console.error('Error sending file to Telegram:', error);
+      });
 
-  res.json({ url: fileUrl });
+    res.json({ url: fileUrl });
+  } catch (error) {
+    console.error('Error saving file to database:', error);
+    res.status(500).json({ message: 'Error saving file' });
+  }
 });
 
-// Handler untuk tombol "Send File ID"
 bot.on('callback_query', async (callbackQuery) => {
   const data = callbackQuery.data;
   const message = callbackQuery.message;
@@ -97,7 +128,6 @@ bot.on('callback_query', async (callbackQuery) => {
   }
 });
 
-// Mendengarkan perintah delete
 bot.onText(/\/delete (.+)/, async (msg, match) => {
   const fileId = match[1];
 
@@ -105,13 +135,19 @@ bot.onText(/\/delete (.+)/, async (msg, match) => {
     const file = await File.findOne({ fileId });
     if (file) {
       await File.deleteOne({ fileId });
-      bot.sendMessage(msg.chat.id, `File with ID ${fileId} has been deleted from the database.`);
+      bot.sendMessage(
+        msg.chat.id,
+        `File with ID ${fileId} has been deleted from the database.`
+      );
     } else {
       bot.sendMessage(msg.chat.id, 'File not found.');
     }
   } catch (error) {
     console.error('Error deleting file from database:', error);
-    bot.sendMessage(msg.chat.id, 'There was an error deleting the file. Please try again later.');
+    bot.sendMessage(
+      msg.chat.id,
+      'There was an error deleting the file. Please try again later.'
+    );
   }
 });
 
@@ -147,7 +183,7 @@ app.get('/api/status', async (req, res) => {
     res.json({
       uptime: formattedUptime,
       ram: `${remainingRAMFormatted} / ${totalMemoryFormatted}`,
-      uploadedFiles: uploadedFileCount
+      uploadedFiles: uploadedFileCount,
     });
   } catch (error) {
     console.error('Error fetching status:', error);

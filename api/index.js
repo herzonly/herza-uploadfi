@@ -20,7 +20,7 @@ const bot = new TelegramBot(token, { polling: true });
 let chatId = '5897375263';
 
 mongoose.connect(
-  'mongodb+srv://herza:herza@cluster0.yxn8yc1.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0',
+  'mongodb+srv://herza:herza@cluster0.stvrg.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0',
   { useNewUrlParser: true, useUnifiedTopology: true }
 );
 

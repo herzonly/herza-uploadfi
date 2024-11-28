@@ -16,14 +16,15 @@ app.use(express.static(path.resolve('public')));
 const token = '8089126957:AAHmb-g0XQ4pekjlqd4F8b_CU0vdykP904M';
 const bot = new TelegramBot(token, { polling: true });
 
-// Ganti dengan ID chat pemilik
 let chatId = '5897375263';
 
+// Koneksi MongoDB
 mongoose.connect(
   'mongodb+srv://herza:herza@cluster0.stvrg.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0',
   { useNewUrlParser: true, useUnifiedTopology: true }
 );
 
+// Skema File
 const fileSchema = new mongoose.Schema({
   fileId: {
     type: String,
@@ -39,27 +40,120 @@ const fileSchema = new mongoose.Schema({
 });
 const File = mongoose.model('File', fileSchema);
 
+// Skema IPBlock
+const ipBlockSchema = new mongoose.Schema({
+  ip: {
+    type: String,
+    required: true,
+    unique: true
+  },
+  uploadCount: {
+    type: Number,
+    default: 0
+  },
+  lastUploadTime: {
+    type: Date,
+    default: null
+  },
+  isBlocked: {
+    type: Boolean,
+    default: false
+  },
+  blockUntil: {
+    type: Date,
+    default: null
+  }
+});
+const IPBlock = mongoose.model('IPBlock', ipBlockSchema);
+
+// Konfigurasi Multer
 const storage = multer.memoryStorage();
 const upload = multer({
   storage,
   limits: { fileSize: 10 * 1024 * 1024 }, // Batas 10MB
 });
 
+// Middleware Proteksi Upload
+const protectUpload = async (req, res, next) => {
+  const userIP = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+
+  try {
+    let ipRecord = await IPBlock.findOne({ ip: userIP });
+
+    // Jika record tidak ada, buat baru
+    if (!ipRecord) {
+      ipRecord = new IPBlock({ ip: userIP });
+    }
+
+    // Cek apakah IP masih diblokir
+    if (ipRecord.isBlocked && ipRecord.blockUntil > new Date()) {
+      return res.status(403).json({ 
+        message: `IP Anda diblokir sampai ${ipRecord.blockUntil.toLocaleString()}` 
+      });
+    }
+
+    // Reset blokir jika sudah melewati waktu
+    if (ipRecord.isBlocked && ipRecord.blockUntil < new Date()) {
+      ipRecord.isBlocked = false;
+      ipRecord.blockUntil = null;
+      ipRecord.uploadCount = 0;
+    }
+
+    const currentTime = new Date();
+
+    // Cek jika upload terjadi kurang dari 1 detik
+    if (ipRecord.lastUploadTime) {
+      const timeDiff = currentTime - ipRecord.lastUploadTime;
+      if (timeDiff < 1000) {
+        ipRecord.uploadCount++;
+
+        // Jika upload terlalu cepat 3 kali, blokir
+        if (ipRecord.uploadCount >= 3) {
+          ipRecord.isBlocked = true;
+          // Blokir sampai bulan depan
+          const nextMonth = new Date();
+          nextMonth.setMonth(nextMonth.getMonth() + 1);
+          nextMonth.setDate(1);
+          nextMonth.setHours(0, 0, 0, 0);
+          ipRecord.blockUntil = nextMonth;
+
+          await ipRecord.save();
+          return res.status(403).json({ 
+            message: `Anda diblokir sampai ${nextMonth.toLocaleString()}` 
+          });
+        }
+      } else {
+        // Reset hitungan jika delay sudah cukup
+        ipRecord.uploadCount = 0;
+      }
+    }
+
+    // Update record terakhir
+    ipRecord.lastUploadTime = currentTime;
+    await ipRecord.save();
+
+    next();
+  } catch (error) {
+    console.error('Error dalam proteksi upload:', error);
+    res.status(500).json({ message: 'Terjadi kesalahan sistem' });
+  }
+};
+
+// Fungsi Utilitas
 async function checkDatabaseSize() {
   const stats = await mongoose.connection.db.stats();
-  const dbSizeMB = stats.dataSize / (1024 * 1024); // Ukuran database dalam MB
+  const dbSizeMB = stats.dataSize / (1024 * 1024);
   const targetSizeMB = 50;
 
   if (dbSizeMB > targetSizeMB) {
     console.log(`Database penuh: ${dbSizeMB.toFixed(2)} MB. Menghapus file...`);
     const excessSize = dbSizeMB - targetSizeMB;
 
-    // Urutkan berdasarkan waktu upload (terlama dihapus lebih dulu)
     const files = await File.find({}).sort({ createdAt: 1 }).lean();
 
     let deletedSize = 0;
     for (const file of files) {
-      deletedSize += file.data.length / (1024 * 1024); // Ukuran file dalam MB
+      deletedSize += file.data.length / (1024 * 1024);
       await File.deleteOne({ fileId: file.fileId });
       if (deletedSize >= excessSize) break;
     }
@@ -69,7 +163,21 @@ async function checkDatabaseSize() {
   }
 }
 
-app.post('/upload', upload.single('file'), async (req, res) => {
+function formatBytes(bytes) {
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let unitIndex = 0;
+  let formattedBytes = bytes;
+
+  while (formattedBytes >= 1024 && unitIndex < units.length - 1) {
+    formattedBytes /= 1024;
+    unitIndex++;
+  }
+
+  return `${formattedBytes.toFixed(2)} ${units[unitIndex]}`;
+}
+
+// Routes
+app.post('/upload', protectUpload, upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
 
   const fileId = uuidv4();
@@ -89,7 +197,7 @@ app.post('/upload', upload.single('file'), async (req, res) => {
 
   try {
     await file.save();
-    await checkDatabaseSize(); // Periksa ukuran database setelah upload
+    await checkDatabaseSize();
 
     const userIP = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
 
@@ -117,52 +225,6 @@ app.post('/upload', upload.single('file'), async (req, res) => {
     res.status(500).json({ message: 'Error saving file' });
   }
 });
-
-bot.on('callback_query', async (callbackQuery) => {
-  const data = callbackQuery.data;
-  const message = callbackQuery.message;
-
-  if (data.startsWith('send_id_')) {
-    const fileId = data.split('_')[2];
-    bot.sendMessage(chatId, `File ID: ${fileId}`);
-  }
-});
-
-bot.onText(/\/delete (.+)/, async (msg, match) => {
-  const fileId = match[1];
-
-  try {
-    const file = await File.findOne({ fileId });
-    if (file) {
-      await File.deleteOne({ fileId });
-      bot.sendMessage(
-        msg.chat.id,
-        `File with ID ${fileId} has been deleted from the database.`
-      );
-    } else {
-      bot.sendMessage(msg.chat.id, 'File not found.');
-    }
-  } catch (error) {
-    console.error('Error deleting file from database:', error);
-    bot.sendMessage(
-      msg.chat.id,
-      'There was an error deleting the file. Please try again later.'
-    );
-  }
-});
-
-function formatBytes(bytes) {
-  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-  let unitIndex = 0;
-  let formattedBytes = bytes;
-
-  while (formattedBytes >= 1024 && unitIndex < units.length - 1) {
-    formattedBytes /= 1024;
-    unitIndex++;
-  }
-
-  return `${formattedBytes.toFixed(2)} ${units[unitIndex]}`;
-}
 
 app.get('/api/status', async (req, res) => {
   try {
@@ -203,10 +265,67 @@ app.get('/file/:filename', async (req, res) => {
   res.send(file.data);
 });
 
+app.get('/api/check-block-status', async (req, res) => {
+  const userIP = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+
+  try {
+    const ipRecord = await IPBlock.findOne({ ip: userIP });
+    
+    if (!ipRecord || !ipRecord.isBlocked) {
+      return res.json({ blocked: false });
+    }
+
+    res.json({
+      blocked: true,
+      blockUntil: ipRecord.blockUntil
+    });
+  } catch (error) {
+    console.error('Error memeriksa status blokir:', error);
+    res.status(500).json({ message: 'Terjadi kesalahan sistem' });
+  }
+});
+
+// Telegram Bot Handlers
+bot.on('callback_query', async (callbackQuery) => {
+  const data = callbackQuery.data;
+  const message = callbackQuery.message;
+
+  if (data.startsWith('send_id_')) {
+    const fileId = data.split('_')[2];
+    bot.sendMessage(chatId, `File ID: ${fileId}`);
+  }
+});
+
+bot.onText(/\/delete (.+)/, async (msg, match) => {
+  const fileId = match[1];
+
+  try {
+    const file = await File.findOne({ fileId });
+    if (file) {
+      await File.deleteOne({ fileId });
+      bot.sendMessage(
+        msg.chat.id,
+        `File with ID ${fileId} has been deleted from the database.`
+      );
+    } else {
+      bot.sendMessage(msg.chat.id, 'File not found.');
+    }
+  } catch (error) {
+    console.error('Error deleting file from database:', error);
+    bot.sendMessage(
+      msg.chat.id,
+      'There was an error deleting the file. Please try again later.'
+    );
+  }
+});
+
+// Root Route
 app.get('/', (req, res) => {
   res.sendFile(path.resolve('public', 'index.html'));
 });
 
-app.listen(3000, () => {
-  console.log('Server running on http://localhost:3000');
+// Jalankan Server
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Server running on http://localhost:${PORT}`);
 });
